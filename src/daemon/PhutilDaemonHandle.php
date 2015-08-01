@@ -1,6 +1,6 @@
 <?php
 
-final class PhutilDaemonHandle {
+final class PhutilDaemonHandle extends Phobject {
 
   const EVENT_DID_LAUNCH    = 'daemon.didLaunch';
   const EVENT_DID_LOG       = 'daemon.didLogMessage';
@@ -11,6 +11,7 @@ final class PhutilDaemonHandle {
   private $overseer;
   private $daemonClass;
   private $argv;
+  private $config;
   private $pid;
   private $daemonID;
   private $deadline;

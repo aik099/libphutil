@@ -1,9 +1,6 @@
 <?php
 
-/**
- * @stable
- */
-abstract class PhutilRemarkupBlockRule {
+abstract class PhutilRemarkupBlockRule extends Phobject {
 
   private $engine;
   private $rules = array();

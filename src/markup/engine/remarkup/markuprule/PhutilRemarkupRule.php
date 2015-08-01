@@ -1,9 +1,6 @@
 <?php
 
-/**
- * @stable
- */
-abstract class PhutilRemarkupRule {
+abstract class PhutilRemarkupRule extends Phobject {
 
   private $engine;
   private $replaceCallback;

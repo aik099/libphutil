@@ -4,10 +4,8 @@
  * A 'future' or 'promise' is an object which represents the result of some
  * pending computation. For a more complete overview of futures, see
  * @{article:Using Futures}.
- *
- * @stable
  */
-abstract class Future {
+abstract class Future extends Phobject {
 
   protected static $handlerInstalled = null;
 

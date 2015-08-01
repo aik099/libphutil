@@ -39,7 +39,7 @@
  *    string (uppercase)
  *
  */
-final class PhutilTypeSpec {
+final class PhutilTypeSpec extends Phobject {
 
   private $type;
   private $subtypes = array();
@@ -166,7 +166,7 @@ final class PhutilTypeSpec {
 
     foreach ($types as $key => $type) {
       if (array_key_exists($key, $values)) {
-        $type->check($values[$key]);
+        $type->check($values[$key], $key);
       }
     }
   }

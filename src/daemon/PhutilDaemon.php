@@ -39,10 +39,8 @@
  *
  * @task overseer Communicating With the Overseer
  * @task autoscale Autoscaling Daemon Pools
- *
- * @stable
  */
-abstract class PhutilDaemon {
+abstract class PhutilDaemon extends Phobject {
 
   const MESSAGETYPE_STDOUT = 'stdout';
   const MESSAGETYPE_HEARTBEAT = 'heartbeat';

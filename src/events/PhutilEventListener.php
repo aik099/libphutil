@@ -1,9 +1,6 @@
 <?php
 
-/**
- * @stable
- */
-abstract class PhutilEventListener {
+abstract class PhutilEventListener extends Phobject {
 
   private $listenerID;
   private static $nextListenerID = 1;

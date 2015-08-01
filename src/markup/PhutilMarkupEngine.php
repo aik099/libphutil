@@ -1,9 +1,6 @@
 <?php
 
-/**
- * @stable
- */
-abstract class PhutilMarkupEngine {
+abstract class PhutilMarkupEngine extends Phobject {
 
   /**
    * Set a configuration parameter which the engine can read to customize how

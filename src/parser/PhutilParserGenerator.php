@@ -52,11 +52,12 @@
  * @task tables       Computing Action and Goto Tables
  * @task inspect      Inspecting Generator State
  */
-final class PhutilParserGenerator {
+final class PhutilParserGenerator extends Phobject {
 
   private $terminals;
   private $rules;
   private $startRule = 'start';
+  private $states = array();
   private $sets = array();
   private $successor = array();
   private $setHashes = array();
