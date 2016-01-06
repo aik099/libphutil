@@ -134,6 +134,7 @@ final class PhutilTranslator extends Phobject {
       case 'en_US':
       case 'en_GB':
       case 'en_W*':
+      case 'en_P*':
       case 'en_R*':
       case 'en_A*':
         list($singular, $plural) = $translations;
@@ -157,6 +158,13 @@ final class PhutilTranslator extends Phobject {
         }
         if ($variant >= 2 && $variant <= 4) {
           return $paucal;
+        }
+        return $plural;
+
+      case 'ko_KR':
+        list($singular, $plural) = $translations;
+        if ($variant == 1) {
+          return $singular;
         }
         return $plural;
 

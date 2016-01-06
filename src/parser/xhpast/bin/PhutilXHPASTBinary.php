@@ -8,7 +8,7 @@ final class PhutilXHPASTBinary extends Phobject {
    * This is the version that would be obtained with an up-to-date XHPAST
    * build. The //actual// XHPAST build version may vary.
    */
-  const EXPECTED_VERSION = '5.7.2';
+  const EXPECTED_VERSION = '5.8.6';
 
   /**
    * The XHPAST build version.
@@ -40,7 +40,7 @@ final class PhutilXHPASTBinary extends Phobject {
       '%s -C %s %Ls',
       $command,
       $path,
-      array('clean', 'all', 'install'));
+      array('SKIP_PARSER=1', 'SKIP_SCANNER=1', 'clean', 'all', 'install'));
 
     // Test the binary.
     if (!self::isAvailable()) {

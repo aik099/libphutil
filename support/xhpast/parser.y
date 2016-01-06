@@ -258,9 +258,8 @@ top_statement:
   $$ = NNEW(n_STATEMENT)->appendChild($1);
   }
 | T_USE use_declarations ';' {
-  NSPAN($1, n_USE, $2);
-  $1->appendChild($2);
-  $$ = NNEW(n_STATEMENT)->appendChild($1);
+  NMORE($2, $1);
+  $$ = NNEW(n_STATEMENT)->appendChild($2);
   NMORE($$, $3);
   }
 | constant_declaration ';' {

@@ -737,7 +737,7 @@ final class ExecFuture extends Future {
       if (!is_resource($proc)) {
         throw new Exception(
           pht(
-            'Failed to %s: %s',
+            'Failed to `%s`: %s',
             'proc_open()',
             $err));
       }
@@ -817,7 +817,18 @@ final class ExecFuture extends Future {
         $max_stderr_read_bytes);
     }
 
+    $is_done = false;
     if (!$status['running']) {
+      // We may still have unread bytes on stdout or stderr, particularly if
+      // this future is being buffered and streamed. If we do, we don't want to
+      // consider the subprocess to have exited until we've read everything.
+      // See T9724 for context.
+      if (feof($stdout) && feof($stderr)) {
+        $is_done = true;
+      }
+    }
+
+    if ($is_done) {
       if ($this->useWindowsFileStreams) {
         fclose($stdout);
         fclose($stderr);
