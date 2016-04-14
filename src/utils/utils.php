@@ -49,6 +49,39 @@ function idx(array $array, $key, $default = null) {
 
 
 /**
+ * Access a sequence of array indexes, retrieving a deeply nested value if
+ * it exists or a default if it does not.
+ *
+ * For example, `idxv($dict, array('a', 'b', 'c'))` accesses the key at
+ * `$dict['a']['b']['c']`, if it exists. If it does not, or any intermediate
+ * value is not itself an array, it returns the defualt value.
+ *
+ * @param array Array to access.
+ * @param list<string> List of keys to access, in sequence.
+ * @param wild Default value to return.
+ * @return wild Accessed value, or default if the value is not accessible.
+ */
+function idxv(array $map, array $path, $default = null) {
+  if (!$path) {
+    return $default;
+  }
+
+  $last = last($path);
+  $path = array_slice($path, 0, -1);
+
+  $cursor = $map;
+  foreach ($path as $key) {
+    $cursor = idx($cursor, $key);
+    if (!is_array($cursor)) {
+      return $default;
+    }
+  }
+
+  return idx($cursor, $last, $default);
+}
+
+
+/**
  * Call a method on a list of objects. Short for "method pull", this function
  * works just like @{function:ipull}, except that it operates on a list of
  * objects instead of a list of arrays. This function simplifies a common type
@@ -362,6 +395,50 @@ function msort(array $list, $method) {
   $surrogate = mpull($list, $method);
 
   asort($surrogate);
+
+  $result = array();
+  foreach ($surrogate as $key => $value) {
+    $result[$key] = $list[$key];
+  }
+
+  return $result;
+}
+
+
+/**
+ * Sort a list of objects by a sort vector.
+ *
+ * This sort is stable, well-behaved, and more efficient than `usort()`.
+ *
+ * @param list List of objects to sort.
+ * @param string Name of a method to call on each object. The method must
+ *   return a @{class:PhutilSortVector}.
+ * @return list Objects ordered by the vectors.
+ */
+function msortv(array $list, $method) {
+  $surrogate = mpull($list, $method);
+
+  $index = 0;
+  foreach ($surrogate as $key => $value) {
+    if (!($value instanceof PhutilSortVector)) {
+      throw new Exception(
+        pht(
+          'Objects passed to "%s" must return sort vectors (objects of '.
+          'class "%s") from the specified method ("%s"). One object (with '.
+          'key "%s") did not.',
+          'msortv()',
+          'PhutilSortVector',
+          $method,
+          $key));
+    }
+
+    // Add the original index to keep the sort stable.
+    $value->addInt($index++);
+
+    $surrogate[$key] = (string)$value;
+  }
+
+  asort($surrogate, SORT_STRING);
 
   $result = array();
   foreach ($surrogate as $key => $value) {
@@ -913,7 +990,7 @@ function phutil_loggable_string($string) {
  * @param resource  Socket or pipe stream.
  * @param string    Bytes to write.
  * @return bool|int Number of bytes written, or `false` on any error (including
- *                  errors which `fpipe()` can not detect, like a broken pipe).
+ *                  errors which `fwrite()` can not detect, like a broken pipe).
  */
 function phutil_fwrite_nonblocking_stream($stream, $bytes) {
   if (!strlen($bytes)) {

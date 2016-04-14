@@ -81,6 +81,8 @@ final class PhutilArgumentParser extends Phobject {
 
   const PARSE_ERROR_CODE = 77;
 
+  private static $traceModeEnabled = false;
+
 
 /* -(  Parsing Arguments  )-------------------------------------------------- */
 
@@ -402,7 +404,9 @@ final class PhutilArgumentParser extends Phobject {
       $this->parse($workflow->getArguments());
     }
 
+
     if ($workflow->isExecutable()) {
+      $workflow->setArgv($this);
       $err = $workflow->execute($this);
       exit($err);
     } else {
@@ -481,6 +485,7 @@ final class PhutilArgumentParser extends Phobject {
 
     if ($this->getArg('trace')) {
       PhutilServiceProfiler::installEchoListener();
+      self::$traceModeEnabled = true;
     }
 
     if ($this->getArg('no-ansi')) {
@@ -820,6 +825,10 @@ final class PhutilArgumentParser extends Phobject {
     $data = xhprof_disable();
     $data = json_encode($data);
     Filesystem::writeFile($this->getArg('xprofile'), $data);
+  }
+
+  public static function isTraceModeEnabled() {
+    return self::$traceModeEnabled;
   }
 
 }
