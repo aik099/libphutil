@@ -8,6 +8,9 @@ abstract class AphrontDatabaseConnection
   implements PhutilQsprintfInterface {
 
   private $transactionState;
+  private $readOnly;
+  private $queryTimeout;
+  private $locks = array();
 
   abstract public function getInsertID();
   abstract public function getAffectedRows();
@@ -15,6 +18,7 @@ abstract class AphrontDatabaseConnection
   abstract public function executeRawQuery($raw_query);
   abstract public function executeRawQueries(array $raw_queries);
   abstract public function close();
+  abstract public function openConnection();
 
   public function queryData($pattern/* , $arg, $arg, ... */) {
     $args = func_get_args();
@@ -37,12 +41,72 @@ abstract class AphrontDatabaseConnection
     return false;
   }
 
+  public function setReadOnly($read_only) {
+    $this->readOnly = $read_only;
+    return $this;
+  }
+
+  public function getReadOnly() {
+    return $this->readOnly;
+  }
+
+  public function setQueryTimeout($query_timeout) {
+    $this->queryTimeout = $query_timeout;
+    return $this;
+  }
+
+  public function getQueryTimeout() {
+    return $this->queryTimeout;
+  }
+
   public function asyncQuery($raw_query) {
     throw new Exception(pht('Async queries are not supported.'));
   }
 
   public static function resolveAsyncQueries(array $conns, array $asyncs) {
     throw new Exception(pht('Async queries are not supported.'));
+  }
+
+
+/* -(  Global Locks  )------------------------------------------------------- */
+
+
+  public function rememberLock($lock) {
+    if (isset($this->locks[$lock])) {
+      throw new Exception(
+        pht(
+          'Trying to remember lock "%s", but this lock has already been '.
+          'remembered.',
+          $lock));
+    }
+
+    $this->locks[$lock] = true;
+    return $this;
+  }
+
+
+  public function forgetLock($lock) {
+    if (empty($this->locks[$lock])) {
+      throw new Exception(
+        pht(
+          'Trying to forget lock "%s", but this connection does not remember '.
+          'that lock.',
+          $lock));
+    }
+
+    unset($this->locks[$lock]);
+    return $this;
+  }
+
+
+  public function forgetAllLocks() {
+    $this->locks = array();
+    return $this;
+  }
+
+
+  public function isHoldingAnyLock() {
+    return (bool)$this->locks;
   }
 
 

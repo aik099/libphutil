@@ -25,6 +25,7 @@ final class PhutilDaemonOverseer extends Phobject {
   private $lastPidfile;
   private $startEpoch;
   private $autoscale = array();
+  private $autoscaleConfig = array();
 
   public function __construct(array $argv) {
     PhutilServiceProfiler::getInstance()->enableDiscardMode();
@@ -148,7 +149,6 @@ EOHELP
 
     $this->modules = PhutilDaemonOverseerModule::getAllModules();
 
-    declare(ticks = 1);
     pcntl_signal(SIGUSR2, array($this, 'didReceiveNotifySignal'));
 
     pcntl_signal(SIGHUP,  array($this, 'didReceiveReloadSignal'));
@@ -181,10 +181,21 @@ EOHELP
           'autoscale' => $config['autoscale'],
         ));
 
-      $daemon->setSilent((!$this->traceMode && !$this->verbose));
       $daemon->setTraceMemory($this->traceMemory);
 
       $this->addDaemon($daemon, $config);
+
+      $group = idx($config['autoscale'], 'group');
+      if (strlen($group)) {
+        if (isset($this->autoscaleConfig[$group])) {
+          throw new Exception(
+            pht(
+              'Two daemons are part of the same autoscale group ("%s"). '.
+              'Each daemon autoscale group must be unique.',
+              $group));
+        }
+        $this->autoscaleConfig[$group] = $config;
+      }
     }
 
     $should_reload = false;
@@ -193,12 +204,18 @@ EOHELP
       foreach ($this->modules as $module) {
         try {
           if ($module->shouldReloadDaemons()) {
+            $this->logMessage(
+              'RELO',
+              pht(
+                'Reloading daemons (triggered by overseer module "%s").',
+                get_class($module)));
             $should_reload = true;
           }
         } catch (Exception $ex) {
           phlog($ex);
         }
       }
+
       if ($should_reload) {
         $this->didReceiveReloadSignal(SIGHUP);
         $should_reload = false;
@@ -261,21 +278,20 @@ EOHELP
 
     unset($this->daemons[$id]);
 
+    $daemon->didRemoveDaemon();
+
     return $this;
   }
 
   private function getAutoscaleGroup(PhutilDaemonHandle $daemon) {
-    return $this->getAutoscaleProperty($daemon, 'group');
-  }
-
-  private function getAutoscaleProperty(
-    PhutilDaemonHandle $daemon,
-    $key,
-    $default = null) {
-
     $id = $daemon->getDaemonID();
     $autoscale = $this->daemons[$id]['config']['autoscale'];
-    return idx($autoscale, $key, $default);
+    return idx($autoscale, 'group');
+  }
+
+  private function getAutoscaleProperty($group_key, $key, $default = null) {
+    $config = $this->autoscaleConfig[$group_key]['autoscale'];
+    return idx($config, $key, $default);
   }
 
   public function didBeginWork(PhutilDaemonHandle $daemon) {
@@ -292,11 +308,14 @@ EOHELP
   }
 
   public function updateAutoscale() {
+    if ($this->inGracefulShutdown) {
+      return;
+    }
+
     foreach ($this->autoscale as $group => $daemons) {
-      $daemon = $this->daemons[head_key($daemons)]['handle'];
-      $scaleup_duration = $this->getAutoscaleProperty($daemon, 'up', 2);
-      $max_pool_size = $this->getAutoscaleProperty($daemon, 'pool', 8);
-      $reserve = $this->getAutoscaleProperty($daemon, 'reserve', 0);
+      $scaleup_duration = $this->getAutoscaleProperty($group, 'up', 2);
+      $max_pool_size = $this->getAutoscaleProperty($group, 'pool', 8);
+      $reserve = $this->getAutoscaleProperty($group, 'reserve', 0);
 
       // Don't scale a group if it is already at the maximum pool size.
       if (count($daemons) >= $max_pool_size) {
@@ -338,7 +357,7 @@ EOHELP
       }
 
       if ($should_scale) {
-        $config = $this->daemons[$daemon_id]['config'];
+        $config = $this->autoscaleConfig[$group];
 
         $config['autoscale']['clone'] = true;
 
@@ -352,6 +371,13 @@ EOHELP
             'load' => $this->libraries,
             'autoscale' => $config['autoscale'],
           ));
+
+        $this->logMessage(
+          'AUTO',
+          pht(
+            'Scaling pool "%s" up to %s daemon(s).',
+            $group,
+            new PhutilNumber(count($daemons) + 1)));
 
         $this->addDaemon($clone, $config);
 
@@ -498,6 +524,12 @@ EOHELP
       $this->lastPidfile = $pidfile;
       $pidfile_path = $this->piddir.'/daemon.'.getmypid();
       Filesystem::writeFile($pidfile_path, json_encode($pidfile));
+    }
+  }
+
+  public function logMessage($type, $message, $context = null) {
+    if ($this->traceMode || $this->verbose) {
+      error_log(date('Y-m-d g:i:s A').' ['.$type.'] '.$message);
     }
   }
 

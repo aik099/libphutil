@@ -471,6 +471,9 @@ final class PhutilUtilsTestCase extends PhutilTestCase {
       '1 hour in seconds' => 3600,
       '1 day in seconds' => 86400,
       '3 days in seconds' => 259200,
+      '128 bits in bytes' => 16,
+      '1 byte in bytes' => 1,
+      '8 bits in bytes' => 1,
     );
 
     foreach ($cases as $input => $expect) {
@@ -487,6 +490,10 @@ final class PhutilUtilsTestCase extends PhutilTestCase {
       '1 day in days',
       '-1 minutes in seconds',
       '1.5 minutes in seconds',
+      '7 bits in bytes',
+      '2 hours in bytes',
+      '1 dram in bytes',
+      '24 bits in seconds',
     );
 
     foreach ($bad_cases as $input) {
@@ -601,18 +608,18 @@ final class PhutilUtilsTestCase extends PhutilTestCase {
       // NOTE: We're liberal about censoring here, since we can't tell
       // if this is a truncated password at the end of an input string
       // or a domain name. The version with a "/" isn't censored.
-      'http://example.com' => 'http://xxxxx',
+      'http://example.com' => 'http://********',
       'http://example.com/' => 'http://example.com/',
 
-      'http://username@example.com' => 'http://xxxxx@example.com',
-      'http://user:pass@example.com' => 'http://xxxxx@example.com',
+      'http://username@example.com' => 'http://********@example.com',
+      'http://user:pass@example.com' => 'http://********@example.com',
 
       // We censor these because they might be truncated credentials at the end
       // of the string.
-      'http://user' => 'http://xxxxx',
-      "http://user\n" => "http://xxxxx\n",
+      'http://user' => 'http://********',
+      "http://user\n" => "http://********\n",
 
-      'svn+ssh://user:pass@example.com' => 'svn+ssh://xxxxx@example.com',
+      'svn+ssh://user:pass@example.com' => 'svn+ssh://********@example.com',
     );
 
     foreach ($cases as $input => $expect) {

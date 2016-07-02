@@ -65,6 +65,11 @@ final class PhutilURITestCase extends PhutilTestCase {
     $this->assertEqual('@', $uri->getPass());
     $this->assertEqual('http://%40:%40@domain.com/', (string)$uri);
 
+    $uri = new PhutilURI('http://%2F:%2F@domain.com/');
+    $this->assertEqual('/', $uri->getUser());
+    $this->assertEqual('/', $uri->getPass());
+    $this->assertEqual('http://%2F:%2F@domain.com/', (string)$uri);
+
     // These tests are covering cases where cURL and parse_url() behavior
     // may differ in potentially dangerous ways. See T6755 for discussion.
 
@@ -90,6 +95,9 @@ final class PhutilURITestCase extends PhutilTestCase {
     $this->assertEqual('good.com', $uri->getDomain());
     $this->assertEqual('http://good.com?u%3Ap%40evil.com%2F=', (string)$uri);
 
+    $uri = new PhutilURI('www.example.com');
+    $this->assertEqual('', $uri->getProtocol());
+    $this->assertEqual('www.example.com', (string)$uri);
   }
 
   public function testURIGeneration() {
@@ -143,6 +151,40 @@ final class PhutilURITestCase extends PhutilTestCase {
         'x' => '/',
       ),
       $uri->getQueryParams());
+
+    // This is not a legitimate URI and should not parse as one.
+    $uri = new PhutilURI('fruit.list: apple banana cherry');
+    $this->assertEqual('', $uri->getDomain());
+  }
+
+  public function testAmbiguousURIs() {
+    // It's important that this be detected as a Javascript URI, because that
+    // is how browsers will treat it.
+    $uri = new PhutilURI('javascript:evil');
+    $this->assertEqual('javascript', $uri->getProtocol());
+
+
+    // This is "wrong", in that the user probably intends for this to be a
+    // Git-style URI, but we can not easily parse it as one without making the
+    // "javascript" case above unsafe.
+    $uri = new PhutilURI('localhost:todo.txt');
+    $this->assertEqual('localhost', $uri->getProtocol());
+
+
+    // These variants are unambiguous and safe.
+    $uri = new PhutilURI('localhost.com:todo.txt');
+    $this->assertEqual('localhost.com', $uri->getDomain());
+
+    $uri = new PhutilURI('user@localhost:todo.txt');
+    $this->assertEqual('localhost', $uri->getDomain());
+
+    // This could either be a Git URI with relative path "22", or a normal URI
+    // with port "22". We should assume it is a port number because this is
+    // relatively common, while relative Git URIs pointing at numeric filenames
+    // are bizarre.
+    $uri = new PhutilURI('domain.com:22');
+    $this->assertEqual('domain.com', $uri->getDomain());
+    $this->assertEqual('22', $uri->getPort());
   }
 
   public function testDefaultPorts() {
@@ -157,6 +199,45 @@ final class PhutilURITestCase extends PhutilTestCase {
 
     $uri = new PhutilURI('unknown://www.example.com');
     $this->assertEqual('', $uri->getPortWithProtocolDefault());
+  }
+
+  public function testGitURIParsing() {
+    $uri = new PhutilURI('git@host.com:path/to/something');
+    $this->assertEqual('ssh', $uri->getProtocol());
+    $this->assertEqual('git', $uri->getUser());
+    $this->assertEqual('host.com', $uri->getDomain());
+    $this->assertEqual('path/to/something', $uri->getPath());
+    $this->assertEqual('git@host.com:path/to/something', (string)$uri);
+
+    $uri = new PhutilURI('host.com:path/to/something');
+    $this->assertEqual('ssh', $uri->getProtocol());
+    $this->assertEqual('', $uri->getUser());
+    $this->assertEqual('host.com', $uri->getDomain());
+    $this->assertEqual('path/to/something', $uri->getPath());
+    $this->assertEqual('host.com:path/to/something', (string)$uri);
+
+    $uri_1 = new PhutilURI('host.com:path/to/something');
+    $uri_2 = new PhutilURI($uri_1);
+
+    $this->assertEqual((string)$uri_1, (string)$uri_2);
+  }
+
+  public function testStrictGitURIParsingOfLeadingWhitespace() {
+    $uri = new PhutilURI(' user@example.com:path');
+    $this->assertEqual('', $uri->getDomain());
+  }
+
+  public function testNoRelativeURIPaths() {
+    $uri = new PhutilURI('user@example.com:relative_path');
+
+    $caught = null;
+    try {
+      $uri->setType(PhutilURI::TYPE_URI);
+    } catch (Exception $ex) {
+      $caught = $ex;
+    }
+
+    $this->assertTrue($caught instanceof Exception);
   }
 
 }

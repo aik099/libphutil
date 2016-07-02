@@ -260,6 +260,9 @@ NEWLINE ("\r\n"|"\n"|"\r")
   "=>" tok(T_DOUBLE_ARROW);
   "::" tok(T_PAAMAYIM_NEKUDOTAYIM);
   "\\" tok(T_NS_SEPARATOR);
+  "..." tok(T_ELLIPSIS);
+  "??" tok(T_COALESCE);
+  "<=>" tok(T_SPACESHIP);
 }
 
  /* Casts */
