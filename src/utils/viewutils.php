@@ -14,8 +14,8 @@ function phutil_date_format($epoch) {
 function phutil_format_relative_time($duration) {
   return phutil_format_units_generic(
     $duration,
-    array(60, 60, 24, 7),
-    array('s', 'm', 'h', 'd', 'w'),
+    array(60, 60, 24, 7, 4),
+    array('s', 'm', 'h', 'd', 'w', 'mo'),
     $precision = 0);
 }
 
@@ -45,8 +45,8 @@ function phutil_format_relative_time_detailed($duration, $levels = 2) {
   $this_level = 1;
   $detailed_relative_time = phutil_format_units_generic(
     $duration,
-    array(60, 60, 24, 7),
-    array('s', 'm', 'h', 'd', 'w'),
+    array(60, 60, 24, 7, 4),
+    array('s', 'm', 'h', 'd', 'w', 'mo'),
     $precision = 0,
     $remainder);
   $duration = $remainder;
@@ -54,8 +54,8 @@ function phutil_format_relative_time_detailed($duration, $levels = 2) {
   while ($remainder > 0 && $this_level < $levels) {
     $detailed_relative_time .= ', '.phutil_format_units_generic(
       $duration,
-      array(60, 60, 24, 7),
-      array('s', 'm', 'h', 'd', 'w'),
+      array(60, 60, 24, 7, 4),
+      array('s', 'm', 'h', 'd', 'w', 'mo'),
       $precision = 0,
       $remainder);
     $duration = $remainder;
