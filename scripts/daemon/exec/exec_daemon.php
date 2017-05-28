@@ -1,7 +1,11 @@
 #!/usr/bin/env php
 <?php
 
-declare(ticks = 1);
+if (function_exists('pcntl_async_signals')) {
+  pcntl_async_signals(true);
+} else {
+  declare(ticks = 1);
+}
 
 require_once dirname(__FILE__).'/../../__init_script__.php';
 
@@ -63,7 +67,7 @@ PhutilTypeSpec::checkMap(
     'log' => 'optional string|null',
     'argv' => 'optional list<wild>',
     'load' => 'optional list<string>',
-    'autoscale' => 'optional wild',
+    'down' => 'optional int',
   ));
 
 $log = idx($config, 'log');
@@ -119,9 +123,9 @@ if ($verbose) {
   $daemon->setVerbose(true);
 }
 
-$autoscale = idx($config, 'autoscale');
-if ($autoscale) {
-  $daemon->setAutoscaleProperties($autoscale);
+$down_duration = idx($config, 'down');
+if ($down_duration) {
+  $daemon->setScaledownDuration($down_duration);
 }
 
 $daemon->execute();

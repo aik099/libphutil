@@ -41,7 +41,7 @@ final class PhutilRemarkupEngine extends PhutilMarkupEngine {
   public function setBlockRules(array $rules) {
     assert_instances_of($rules, 'PhutilRemarkupBlockRule');
 
-    $rules = msort($rules, 'getPriority');
+    $rules = msortv($rules, 'getPriorityVector');
 
     $this->blockRules = $rules;
     foreach ($this->blockRules as $rule) {
@@ -293,7 +293,7 @@ final class PhutilRemarkupEngine extends PhutilMarkupEngine {
       $rule->didMarkupText();
     }
 
-    return $this->restoreText(idx($dict, 'output'), $this->isTextMode());
+    return $this->restoreText(idx($dict, 'output'));
   }
 
   public function restoreText($text) {

@@ -47,6 +47,7 @@ abstract class PhutilDaemon extends Phobject {
   const MESSAGETYPE_BUSY = 'busy';
   const MESSAGETYPE_IDLE = 'idle';
   const MESSAGETYPE_DOWN = 'down';
+  const MESSAGETYPE_HIBERNATE = 'hibernate';
 
   const WORKSTATE_BUSY = 'busy';
   const WORKSTATE_IDLE = 'idle';
@@ -59,7 +60,7 @@ abstract class PhutilDaemon extends Phobject {
   private $inGracefulShutdown;
   private $workState = null;
   private $idleSince = null;
-  private $autoscaleProperties = array();
+  private $scaledownDuration;
 
   final public function setVerbose($verbose) {
     $this->verbose = $verbose;
@@ -70,14 +71,25 @@ abstract class PhutilDaemon extends Phobject {
     return $this->verbose;
   }
 
-  private static $sighandlerInstalled;
+  final public function setScaledownDuration($scaledown_duration) {
+    $this->scaledownDuration = $scaledown_duration;
+    return $this;
+  }
+
+  final public function getScaledownDuration() {
+    return $this->scaledownDuration;
+  }
 
   final public function __construct(array $argv) {
     $this->argv = $argv;
 
-    if (!self::$sighandlerInstalled) {
-      self::$sighandlerInstalled = true;
-      pcntl_signal(SIGTERM, __CLASS__.'::exitOnSignal');
+    $router = PhutilSignalRouter::getRouter();
+    $handler_key = 'daemon.term';
+    if (!$router->getHandler($handler_key)) {
+      $handler = new PhutilCallbackSignalHandler(
+        SIGTERM,
+        __CLASS__.'::onTermSignal');
+      $router->installHandler($handler_key, $handler);
     }
 
     pcntl_signal(SIGINT, array($this, 'onGracefulSignal'));
@@ -114,22 +126,50 @@ abstract class PhutilDaemon extends Phobject {
     return $this->inGracefulShutdown;
   }
 
+  final protected function shouldHibernate($duration) {
+    // Don't hibernate if we don't have very long to sleep.
+    if ($duration < 30) {
+      return false;
+    }
+
+    // Never hibernate if we're part of a pool and could scale down instead.
+    // We only hibernate the last process to drop the pool size to zero.
+    if ($this->getScaledownDuration()) {
+      return false;
+    }
+
+    // Don't hibernate for too long.
+    $duration = min($duration, phutil_units('3 minutes in seconds'));
+
+    $this->emitOverseerMessage(
+      self::MESSAGETYPE_HIBERNATE,
+      array(
+        'duration' => $duration,
+      ));
+
+    $this->log(
+      pht(
+        'Preparing to hibernate for %s second(s).',
+        new PhutilNumber($duration)));
+
+    return true;
+  }
+
   final protected function sleep($duration) {
     $this->notifyReceived = false;
     $this->willSleep($duration);
     $this->stillWorking();
 
-    $is_autoscale = $this->isClonedAutoscaleDaemon();
-    $scale_down = $this->getAutoscaleDownDuration();
+    $scale_down = $this->getScaledownDuration();
 
     $max_sleep = 60;
-    if ($is_autoscale) {
+    if ($scale_down) {
       $max_sleep = min($max_sleep, $scale_down);
     }
 
-    if ($is_autoscale) {
+    if ($scale_down) {
       if ($this->workState == self::WORKSTATE_IDLE) {
-        $dur = (time() - $this->idleSince);
+        $dur = $this->getIdleDuration();
         $this->log(pht('Idle for %s seconds.', $dur));
       }
     }
@@ -141,7 +181,7 @@ abstract class PhutilDaemon extends Phobject {
       // If this is an autoscaling clone and we've been idle for too long,
       // we're going to scale the pool down by exiting and not restarting. The
       // DOWN message tells the overseer that we don't want to be restarted.
-      if ($is_autoscale) {
+      if ($scale_down) {
         if ($this->workState == self::WORKSTATE_IDLE) {
           if ($this->idleSince && ($this->idleSince + $scale_down < time())) {
             $this->inGracefulShutdown = true;
@@ -166,13 +206,8 @@ abstract class PhutilDaemon extends Phobject {
     return;
   }
 
-  public static function exitOnSignal($signo) {
+  public static function onTermSignal($signo) {
     self::didCatchSignal($signo);
-
-    // Normally, PHP doesn't invoke destructors when exiting in response to
-    // a signal. This forces it to do so, so we have a fighting chance of
-    // releasing any locks, leases or resources on our way out.
-    exit(128 + $signo);
   }
 
   final protected function getArgv() {
@@ -330,8 +365,8 @@ abstract class PhutilDaemon extends Phobject {
    * Prepare to idle. This may autoscale the pool down.
    *
    * This notifies the overseer that the daemon is no longer busy. If daemons
-   * that are part of an autoscale pool are idle for a prolonged period of time,
-   * they may exit to scale the pool down.
+   * that are part of an autoscale pool are idle for a prolonged period of
+   * time, they may exit to scale the pool down.
    *
    * @return this
    * @task autoscale
@@ -346,65 +381,13 @@ abstract class PhutilDaemon extends Phobject {
     return $this;
   }
 
+  protected function getIdleDuration() {
+    if (!$this->idleSince) {
+      return null;
+    }
 
-  /**
-   * Determine if this is a clone or the original daemon.
-   *
-   * @return bool True if this is an cloned autoscaling daemon.
-   * @task autoscale
-   */
-  private function isClonedAutoscaleDaemon() {
-    return (bool)$this->getAutoscaleProperty('clone', false);
-  }
-
-
-  /**
-   * Get the duration (in seconds) which a daemon must be continuously idle
-   * for before it should exit to scale the pool down.
-   *
-   * @return int Duration, in seconds.
-   * @task autoscale
-   */
-  private function getAutoscaleDownDuration() {
-    return $this->getAutoscaleProperty('down', 15);
-  }
-
-
-  /**
-   * Configure autoscaling for this daemon.
-   *
-   * @param map<string, wild> Map of autoscale properties.
-   * @return this
-   * @task autoscale
-   */
-  public function setAutoscaleProperties(array $autoscale_properties) {
-    PhutilTypeSpec::checkMap(
-      $autoscale_properties,
-      array(
-        'group' => 'optional string',
-        'up' => 'optional int',
-        'down' => 'optional int',
-        'pool' => 'optional int',
-        'clone' => 'optional bool',
-        'reserve' => 'optional int|float',
-      ));
-
-    $this->autoscaleProperties = $autoscale_properties;
-
-    return $this;
-  }
-
-
-  /**
-   * Read autoscaling configuration for this daemon.
-   *
-   * @param string Property to read.
-   * @param wild Default value to return if the property is not set.
-   * @return wild Property value, or `$default` if one is not set.
-   * @task autoscale
-   */
-  private function getAutoscaleProperty($key, $default = null) {
-    return idx($this->autoscaleProperties, $key, $default);
+    $now = time();
+    return ($now - $this->idleSince);
   }
 
 }

@@ -59,6 +59,10 @@ final class AphrontMySQLiDatabaseConnection
       $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, $timeout);
     }
 
+    if ($this->getPersistent()) {
+      $host = 'p:'.$host;
+    }
+
     @$conn->real_connect(
       $host,
       $user,
@@ -74,7 +78,7 @@ final class AphrontMySQLiDatabaseConnection
 
     $ok = @$conn->set_charset('utf8mb4');
     if (!$ok) {
-      $ok = $conn->set_charset('utf8');
+      $ok = $conn->set_charset('binary');
     }
 
     return $conn;

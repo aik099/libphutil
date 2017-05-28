@@ -63,6 +63,14 @@ final class ExecFutureTestCase extends PhutilTestCase {
     $future->resolve();
   }
 
+  public function testTerminateWithoutStart() {
+    // We never start this future, but it should be fine to kill a future from
+    // any state.
+    $future = new ExecFuture('sleep 1');
+    $future->resolveKill();
+
+    $this->assertTrue(true);
+  }
 
   public function testTimeoutTestShouldRunLessThan1Sec() {
     // NOTE: This is partly testing that we choose appropriate select wait
@@ -87,18 +95,6 @@ final class ExecFutureTestCase extends PhutilTestCase {
       $this->assertTrue($err > 0);
       $this->assertTrue($future->getWasKilledByTimeout());
     }
-  }
-
-  public function testNoHangOnExecFutureDestructionWithRunningChild() {
-    $start = microtime(true);
-      $future = new ExecFuture('sleep 30');
-      $future->start();
-      unset($future);
-    $end = microtime(true);
-
-    // If ExecFuture::__destruct() hangs until the child closes, we won't make
-    // it here in time.
-    $this->assertTrue(($end - $start) < 5);
   }
 
   public function testMultipleResolves() {
