@@ -7,15 +7,28 @@
 final class PhutilServiceProfiler extends Phobject {
 
   private static $instance;
+
   private $listeners = array();
   private $events = array();
   private $logSize = 0;
+
   private $discardMode = false;
+  private $collectStackTraces;
+  private $zeroTime;
 
   private function __construct() {}
 
   public function enableDiscardMode() {
     $this->discardMode = true;
+  }
+
+  public function setCollectStackTraces($collect_stack_traces) {
+    $this->collectStackTraces = $collect_stack_traces;
+    return $this;
+  }
+
+  public function getCollectStackTraces() {
+    return $this->collectStackTraces;
   }
 
   public static function getInstance() {
@@ -27,6 +40,13 @@ final class PhutilServiceProfiler extends Phobject {
 
   public function beginServiceCall(array $data) {
     $data['begin'] = microtime(true);
+
+    if ($this->collectStackTraces) {
+      $trace = debug_backtrace();
+      $trace = PhutilErrorHandler::formatStacktrace($trace);
+      $data['trace'] = $trace;
+    }
+
     $id = $this->logSize++;
     $this->events[$id] = $data;
     foreach ($this->listeners as $listener) {
@@ -166,13 +186,37 @@ final class PhutilServiceProfiler extends Phobject {
         new PhutilNumber((int)(1000000 * $data['duration'])));
     }
 
+    $instance = self::getInstance();
+    if (!$instance->zeroTime) {
+      $instance->zeroTime = microtime(true);
+    }
+    $elapsed = microtime(true) - $instance->zeroTime;
+
     $console = PhutilConsole::getConsole();
     $console->writeLog(
-      "%s [%s] <%s> %s\n",
+      "%s [%s] (+%s) <%s> %s\n",
       $mark,
       $id,
+      pht('%s', new PhutilNumber((int)(1000 * $elapsed))),
       $type,
-      $desc);
+      self::escapeProfilerStringForDisplay($desc));
   }
+
+  private static function escapeProfilerStringForDisplay($string) {
+    // Convert tabs and newlines to spaces and collapse blocks of whitespace,
+    // most often formatting in queries.
+    $string = preg_replace('/\s{2,}/', ' ', $string);
+
+    // Replace sequences of binary characters with printable text. We allow
+    // some printable characters to appear in between unprintable characters
+    // to try to collapse the entire run.
+    $string = preg_replace(
+      '/[\x00-\x1F\x7F-\xFF](.{0,12}[\x00-\x1F\x7F-\xFF])*/',
+      '<...binary data...>',
+      $string);
+
+    return $string;
+  }
+
 
 }

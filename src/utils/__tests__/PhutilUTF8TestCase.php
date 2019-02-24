@@ -209,13 +209,11 @@ final class PhutilUTF8TestCase extends PhutilTestCase {
       array("Gr\xCD\xA0mpyCatSmiles", 8, '...', "Gr\xCD\xA0mpy..."),
       array("X\xCD\xA0\xCD\xA0\xCD\xA0Y", 1, '', "X\xCD\xA0\xCD\xA0\xCD\xA0"),
 
-      // This behavior is maybe a little bad, but it seems mostly reasonable,
-      // at least for latin languages.
       array(
         'Derp, supercalafragalisticexpialadoshus',
         30,
         '...',
-        'Derp...',
+        'Derp, supercalafragalistice...',
       ),
 
       // If a string has only word-break characters in it, we should just cut
@@ -224,6 +222,13 @@ final class PhutilUTF8TestCase extends PhutilTestCase {
 
       // Terminal is longer than requested input.
       array('derp', 3, 'quack', 'quack'),
+
+      array(
+        'O123: com/oracle/java/path/to/application/source/ThingFactory.java',
+        32,
+        '...',
+        'O123: com/oracle/java/path/to...',
+      ),
     );
 
     foreach ($inputs as $input) {
@@ -609,6 +614,22 @@ final class PhutilUTF8TestCase extends PhutilTestCase {
     $this->assertTrue(true);
   }
 
+  public function testCJK() {
+    $map = array(
+      '' => false,
+      'a' => false,
+      '.' => false,
+      "\xE2\x98\x83" => false,
+      "\xE5\xA0\xB1" => true,
+    );
+
+    foreach ($map as $input => $expect) {
+      $actual = phutil_utf8_is_cjk($input);
+
+      $this->assertEqual($expect, $actual, pht('CJK: "%s"', $input));
+    }
+  }
+
   public function testUTF8BMP() {
     $tests = array(
       ''  => array(
@@ -721,6 +742,72 @@ final class PhutilUTF8TestCase extends PhutilTestCase {
         phutil_is_utf8_with_only_bmp_characters($input),
         pht('is_utf_bmp(%s)', $test_name));
     }
+  }
+
+  public function testSystemLocaleManagement() {
+    $original_locale = phutil_get_system_locale();
+    $this->assertTrue(
+      (strlen($original_locale) > 0),
+      pht('System has some identifiable locale.'));
+
+    $this->assertFalse(
+      phutil_is_system_locale_available('duck.quack'),
+      pht('Imaginary locale should be unavailable.'));
+
+    $this->assertEqual(
+      $original_locale,
+      phutil_get_system_locale(),
+      pht('Testing locale availability should not change the locale.'));
+
+    $this->assertTrue(
+      phutil_is_system_locale_available($original_locale),
+      pht('The current locale should be available.'));
+
+    $caught = null;
+    try {
+      phutil_set_system_locale('duck.quack');
+    } catch (Exception $ex) {
+      $caught = $ex;
+    }
+
+    $this->assertTrue(
+      ($caught instanceof Exception),
+      pht('Setting an imaginary locale should raise an exception.'));
+
+    // We need two locales for the next part because one of them might be the
+    // current locale, and we want to make sure we can actually change the
+    // locale value.
+
+    // If the current locale was "zz_ZZ", and then we do this:
+    //
+    //   set_locale("zz_ZZ");
+    //   assert("zz_ZZ" == get_locale());
+    //
+    // ...the test could pass even if "set_locale(...)" does nothing.
+
+    $has_us = phutil_is_system_locale_available('en_US.UTF-8');
+    $has_gb = phutil_is_system_locale_available('en_GB.UTF-8');
+    if (!$has_us || !$has_gb) {
+      $this->assertSkipped(
+        pht(
+          'System does not have en_US + en_GB to do locale adjustment '.
+          'tests.'));
+    }
+
+    phutil_set_system_locale('en_US.UTF-8');
+    $this->assertEqual(
+      'en_US.UTF-8',
+      phutil_get_system_locale(),
+      pht('Set locale to en_US.'));
+
+    phutil_set_system_locale('en_GB.UTF-8');
+    $this->assertEqual(
+      'en_GB.UTF-8',
+      phutil_get_system_locale(),
+      pht('Set locale to en_GB.'));
+
+    // Put things back the way they were.
+    phutil_set_system_locale($original_locale);
   }
 
 }

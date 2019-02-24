@@ -204,29 +204,80 @@ final class PhutilBootloader {
         $root = $_SERVER['PHUTIL_LIBRARY_ROOT'];
       }
     }
-    $okay = $this->executeInclude($root.$path.'/__phutil_library_init__.php');
-    if (!$okay) {
-      throw new PhutilBootloaderException(
-        "Include of '{$path}/__phutil_library_init__.php' failed!");
-    }
+
+    $this->executeInclude($root.$path.'/__phutil_library_init__.php');
   }
 
   public function loadLibrarySource($library, $source) {
     $path = $this->getLibraryRoot($library).'/'.$source;
-    $okay = $this->executeInclude($path);
-    if (!$okay) {
-      throw new PhutilBootloaderException("Include of '{$path}' failed!");
-    }
+    $this->executeInclude($path);
   }
 
   private function executeInclude($path) {
-    // Suppress warning spew if the file does not exist; we'll throw an
-    // exception instead. We still emit error text in the case of syntax errors.
-    $old = error_reporting(E_ALL & ~E_WARNING);
-    $okay = include_once $path;
-    error_reporting($old);
+    // Include the source using `include_once`, but convert any warnings or
+    // recoverable errors into exceptions.
 
-    return $okay;
+    // Some messages, including "Declaration of X should be compatible with Y",
+    // do not cause `include_once` to return an error code. Use
+    // error_get_last() to make sure we're catching everything in every PHP
+    // version.
+
+    // (Also, the severity of some messages changed between versions of PHP.)
+
+    // Note that we may enter this method after some earlier, unrelated error.
+    // In this case, error_get_last() will return information for that error.
+    // In PHP7 and later we could use error_clear_last() to clear that error,
+    // but the function does not exist in earlier versions of PHP. Instead,
+    // check if the value has changed.
+
+    // Some parser-like errors, including "class must implement all abstract
+    // methods", cause PHP to fatal immediately with an E_ERROR. In these
+    // cases, include_once() does not throw and never returns. We leave
+    // reporting enabled for these errors since we don't have a way to do
+    // anything more graceful.
+
+    // Likewise, some errors, including "cannot redeclare Class::method()"
+    // cause PHP to fatal immediately with E_COMPILE_ERROR. Treat these like
+    // the similar errors which raise E_ERROR.
+
+    // See also T12190.
+
+    $old_last = error_get_last();
+
+    try {
+      $old = error_reporting(E_ERROR | E_COMPILE_ERROR);
+      $okay = include_once $path;
+      error_reporting($old);
+    } catch (Exception $ex) {
+      throw $ex;
+    } catch (ParseError $throwable) {
+      // NOTE: As of PHP7, syntax errors may raise a ParseError (which is a
+      // Throwable, not an Exception) with a useless message (like "syntax
+      // error, unexpected ':'") and a trace which ends a level above this.
+
+      // Treating this object normally results in an unusable message which
+      // does not identify where the syntax error occurred. Converting it to
+      // a string and taking the first line gives us something reasonable,
+      // however.
+      $message = (string)$throwable;
+      $message = preg_split("/\n/", $message);
+      $message = reset($message);
+
+      throw new Exception($message);
+    }
+
+    if (!$okay) {
+      throw new Exception("Source file \"{$path}\" failed to load.");
+    }
+
+    $new_last = error_get_last();
+    if ($new_last !== null) {
+      if ($new_last !== $old_last) {
+        $message = $new_last['message'];
+        throw new Exception(
+          "Error while loading file \"{$path}\": {$message}");
+      }
+    }
   }
 
   private function loadExtension($library, $root, $path) {
@@ -235,11 +286,7 @@ final class PhutilBootloader {
     $old_classes = array_fill_keys(get_declared_classes(), true);
     $old_interfaces = array_fill_keys(get_declared_interfaces(), true);
 
-    $ok = $this->executeInclude($path);
-    if (!$ok) {
-      throw new PhutilBootloaderException(
-        "Include of extension file '{$path}' failed!");
-    }
+    $this->executeInclude($path);
 
     $new_functions = get_defined_functions();
     $new_functions = array_fill_keys($new_functions['user'], true);

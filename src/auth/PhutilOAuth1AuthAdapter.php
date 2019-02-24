@@ -92,6 +92,12 @@ abstract class PhutilOAuth1AuthAdapter extends PhutilAuthAdapter {
     return 'HMAC-SHA1';
   }
 
+  public function getContentSecurityPolicyFormActions() {
+    return array(
+      $this->getAuthorizeTokenURI(),
+    );
+  }
+
   protected function newOAuth1Future($uri, $data = array()) {
     $future = id(new PhutilOAuth1Future($uri, $data))
       ->setMethod('POST')
@@ -148,7 +154,7 @@ abstract class PhutilOAuth1AuthAdapter extends PhutilAuthAdapter {
     $this->readTokenAndTokenSecret($data);
 
     $authorize_token_uri = new PhutilURI($this->getAuthorizeTokenURI());
-    $authorize_token_uri->setQueryParam('oauth_token', $this->getToken());
+    $authorize_token_uri->replaceQueryParam('oauth_token', $this->getToken());
 
     return (string)$authorize_token_uri;
   }

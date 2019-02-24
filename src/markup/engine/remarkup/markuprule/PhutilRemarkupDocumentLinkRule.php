@@ -15,7 +15,26 @@ final class PhutilRemarkupDocumentLinkRule extends PhutilRemarkupRule {
 
     // Handle markdown-style links: [name](href)
     $text = preg_replace_callback(
-      '@\B\\[([^\\]]+)\\]\\(([^\\)]+)\\)\B@U',
+      '@'.
+        '\B'.
+        '\\[([^\\]]+)\\]'.
+        '\\('.
+          '(\s*'.
+            // See T12343. This is making some kind of effort to implement
+            // parenthesis balancing rules. It won't get nested parentheses
+            // right, but should do OK for Wikipedia pages, which seem to be
+            // the most important use case.
+
+            // Match zero or more non-parenthesis, non-space characters.
+            '[^\s()]*'.
+            // Match zero or more sequences of "(...)", where two balanced
+            // parentheses enclose zero or more normal characters. If we
+            // match some, optionally match more stuff at the end.
+            '(?:(?:\\([^ ()]*\\))+[^\s()]*)?'.
+          '\s*)'.
+        '\\)'.
+      '\B'.
+      '@U',
       array($this, 'markupAlternateLink'),
       $text);
 
@@ -72,15 +91,20 @@ final class PhutilRemarkupDocumentLinkRule extends PhutilRemarkupRule {
     return phutil_tag(
       'a',
       array(
-        'href'    => $link,
-        'class'   => 'remarkup-link',
-        'target'  => $target,
+        'href' => $link,
+        'class' => 'remarkup-link',
+        'target' => $target,
+        'rel' => 'noreferrer',
       ),
       $name);
   }
 
   public function markupAlternateLink(array $matches) {
     $uri = trim($matches[2]);
+
+    if (!strlen($uri)) {
+      return $matches[0];
+    }
 
     // NOTE: We apply some special rules to avoid false positives here. The
     // major concern is that we do not want to convert `x[0][1](y)` in a
@@ -120,11 +144,25 @@ final class PhutilRemarkupDocumentLinkRule extends PhutilRemarkupRule {
       $protocols = $this->getEngine()->getConfig(
         'uri.allowed-protocols',
         array());
-      $protocol = id(new PhutilURI($uri))->getProtocol();
-      if (!idx($protocols, $protocol)) {
-        // Don't treat this as a URI if it's not an allowed protocol.
+
+      try {
+        $protocol = id(new PhutilURI($uri))->getProtocol();
+        if (!idx($protocols, $protocol)) {
+          // Don't treat this as a URI if it's not an allowed protocol.
+          $is_uri = false;
+        }
+      } catch (Exception $ex) {
+        // We can end up here if we try to parse an ambiguous URI, see
+        // T12796.
         $is_uri = false;
       }
+    }
+
+    // As a special case, skip "[[ / ]]" so that Phriction picks it up as a
+    // link to the Phriction root. It is more useful to be able to use this
+    // syntax to link to the root document than the home page of the install.
+    if ($uri == '/') {
+      $is_uri = false;
     }
 
     if (!$is_uri) {

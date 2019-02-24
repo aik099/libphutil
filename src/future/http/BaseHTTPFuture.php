@@ -264,6 +264,18 @@ abstract class BaseHTTPFuture extends Future {
     return $this->addHeader('Authorization', 'Basic '.$credentials);
   }
 
+  public function getHTTPRequestByteLength() {
+    // NOTE: This isn't very accurate, but it's only used by the "--trace"
+    // call profiler to help pick out huge requests.
+    $data = $this->getData();
+
+    if (is_scalar($data)) {
+      return strlen($data);
+    }
+
+    return strlen(phutil_build_http_querystring($data));
+  }
+
 
 /* -(  Resolving the Request  )---------------------------------------------- */
 
@@ -299,7 +311,7 @@ abstract class BaseHTTPFuture extends Future {
    */
   protected function parseRawHTTPResponse($raw_response) {
     $rex_base = "@^(?P<head>.*?)\r?\n\r?\n(?P<body>.*)$@s";
-    $rex_head = "@^HTTP/\S+ (?P<code>\d+) (?P<status>.*?)".
+    $rex_head = "@^HTTP/\S+ (?P<code>\d+) ?(?P<status>.*?)".
                 "(?:\r?\n(?P<headers>.*))?$@s";
 
     // We need to parse one or more header blocks in case we got any

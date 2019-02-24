@@ -1067,6 +1067,10 @@ optional_type:
     $$ = NNEW(n_EMPTY);
   }
 | type
+| '?' type {
+    $$ = NNEW(n_NULLABLE_TYPE);
+    $$->appendChild($2);
+  }
 ;
 
 type:
@@ -1085,8 +1089,9 @@ return_type:
   %empty {
     $$ = NNEW(n_EMPTY);
   }
-| ':' type {
-    $$ = $2;
+| ':' optional_type {
+    $$ = NNEW(n_DECLARATION_RETURN);
+    $$->appendChild($2);
   }
 ;
 
@@ -2738,6 +2743,21 @@ new_expr:
   T_NEW class_name_reference ctor_arguments {
     NTYPE($1, n_NEW);
     $1->appendChild($2);
+    $1->appendChild($3);
+    $$ = $1;
+  }
+| T_NEW T_CLASS ctor_arguments extends_from implements_list
+  '{' class_statement_list '}' {
+    $$ = NNEW(n_CLASS_DECLARATION);
+    $$->appendChild($2);
+    $$->appendChild(NNEW(n_EMPTY));
+    $$->appendChild($4);
+    $$->appendChild($5);
+    $$->appendChild(NEXPAND($6, $7, $8));
+    NMORE($$, $8);
+
+    NTYPE($1, n_NEW);
+    $1->appendChild($$);
     $1->appendChild($3);
     $$ = $1;
   }
