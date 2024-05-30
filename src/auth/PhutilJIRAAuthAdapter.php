@@ -27,11 +27,25 @@ final class PhutilJIRAAuthAdapter extends PhutilOAuth1AuthAdapter {
     // side effect by Auth providers.
     $this->getHandshakeData();
 
-    return idx($this->getUserInfo(), 'key');
+    $key = idx($this->getUserInfo(), 'key');
+
+    // Fallback for Jira Cloud.
+    if (!$key) {
+      return idx($this->getUserInfo(), 'accountId');
+    }
+
+    return $key;
   }
 
   public function getAccountName() {
-    return idx($this->getUserInfo(), 'name');
+    $name = idx($this->getUserInfo(), 'name');
+
+    // Fallback for Jira Cloud.
+    if (!$name) {
+      return idx($this->getUserInfo(), 'accountId');
+    }
+
+    return $name;
   }
 
   public function getAccountImageURI() {
@@ -91,8 +105,11 @@ final class PhutilJIRAAuthAdapter extends PhutilOAuth1AuthAdapter {
       // The session call gives us the username, but not the user key or other
       // information. Make a second call to get additional information.
 
+      // https://developer.atlassian.com/cloud/jira/platform/deprecation-notice-user-privacy-api-migration-guide
+
       $params = array(
-        'username' => $this->currentSession['name'],
+        'accountId' => $this->currentSession['name'], // For Jira Cloud (personal data anonymized since 1 Oct 2018).
+        'username' => $this->currentSession['name'], // For Jira Self-Hosted.
       );
 
       $this->userInfo = $this->newJIRAFuture('rest/api/2/user', 'GET', $params)
