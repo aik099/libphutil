@@ -87,7 +87,17 @@ abstract class PhutilExecutableFuture extends Future {
    */
   final public function getEnv() {
     if (!$this->hasEnv()) {
-      $default_env = $_ENV;
+      $default_env = array();
+
+      foreach (array_filter($_SERVER, 'is_string') as $k => $v) {
+        $v = getenv($k);
+
+        if ($v !== false) {
+          $default_env[$k] = $v;
+        }
+      }
+
+      $default_env = array_filter($_ENV, 'is_string') + $default_env;
 
       // If `variables_order` does not include "E", the $_ENV superglobal
       // does not build and there's no apparent reasonable way for us to
